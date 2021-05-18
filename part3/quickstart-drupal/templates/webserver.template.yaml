@@ -247,17 +247,6 @@ Parameters:
   WebELBSecurityGroup:
     Description: ELB Security Group
     Type: AWS::EC2::SecurityGroup::Id
-  EnableElastiCache:
-    Description: Enable ElastiCache
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
-    Type: String
-  ElastiCacheClusterId:
-    Description: ElastiCache Cluster Id.
-    Type: String
-    Default: ''
 Mappings:
   AWSAMIRegionMap:
     AMI:
@@ -290,26 +279,11 @@ Mappings:
       AMZNLINUXHVM: ami-021bb9f371690f97a
     us-west-2:
       AMZNLINUXHVM: ami-079f731edfe27c29c
-Rules:
-  ElastiCacheRule:
-    RuleCondition: !Equals
-      - !Ref 'EnableElastiCache'
-      - 'true'
-    Assertions:
-      - Assert: !Not
-          - !Equals
-            - !Ref 'ElastiCacheClusterId'
-            - ''
-        AssertDescription: ElastiCacheClusterId cannot be empty when EnableElastiCache
-          is true.
 Conditions:
   UsingDefaultBucket: !Equals [!Ref QSS3BucketName, 'aws-quickstart']
   GovCloudCondition: !Equals
     - !Ref 'AWS::Region'
     - us-gov-west-1
-  EnableElastiCacheCondition: !Equals
-    - !Ref 'EnableElastiCache'
-    - 'true'
 Resources:
   DrupalEFS:
     Type: AWS::EFS::FileSystem
@@ -354,20 +328,6 @@ Resources:
       Path: /
       Roles:
         - !Ref 'WebServerInstanceRole'
-  DescribeElastiCachePolicy:
-    Type: AWS::IAM::Policy
-    Condition: EnableElastiCacheCondition
-    Properties:
-      PolicyName: DescirbeElastiCacheClusterPolicy
-      PolicyDocument:
-        Statement:
-          - Action:
-              - elasticache:Describe*
-              - elasticache:List*
-            Effect: Allow
-            Resource: '*'
-      Roles:
-        - !Ref 'WebServerInstanceRole'
   DrupalAMIEC2Instance:
     Type: AWS::EC2::Instance
     DependsOn:
@@ -385,13 +345,6 @@ Resources:
               - - install-packageSet-
                 - !Ref 'PhpVersion'
             - drupal
-            - !If
-              - EnableElastiCacheCondition
-              - !Join
-                - ''
-                - - memcached-drupal-
-                  - !Ref 'DrupalVersion'
-              - !Ref 'AWS::NoValue'
         install_cfn:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -663,111 +616,6 @@ Resources:
                   - /etc/httpd/conf.d/drupal.conf
                   - /etc/php.ini
                   - /var/www/drupal/sites/default/settings.php
-        memcached-drupal-7:
-          files:
-            /tmp/drupalCacheConfig.sh:
-              content: !Join
-                - ''
-                - - "#!/bin/bash\n"
-                  - "printf \"\n"
-                  - "/**\n"
-                  - "* Memcache Configuration\n"
-                  - "*/\n"
-                  - "\\$conf['cache_backends'][] = 'sites/all/modules/memcache/memcache.inc';\n"
-                  - "\\$conf['cache_default_class'] = 'MemCacheDrupal';\n"
-                  - "\\$conf['cache_class_cache_form'] = 'DrupalDatabaseCache';\n"
-                  - "\\$conf['memcache_key_prefix'] = 'mc1';\n"
-                  - "\\$conf['page_cache_without_database'] = TRUE;\n"
-                  - "\\$conf['page_cache_invoke_hooks'] = FALSE;\n"
-                  - "\\$conf['memcache_servers'] = array(\\n\"\n"
-                  - "for node in \\\n"
-                  - "`aws elasticache describe-cache-clusters --show-cache-node-info\
-                    \ \\\n"
-                  - '--cache-cluster-id '
-                  - !Ref 'ElastiCacheClusterId'
-                  - " \\\n"
-                  - "--query 'CacheClusters[0].CacheNodes[*].Endpoint.[Address, Port]'\
-                    \ \\\n"
-                  - --output=text --region='
-                  - !Ref 'AWS::Region'
-                  - "'\\\n"
-                  - "| sed -E -e 's/[[:space:]]+/:/g'`\n"
-                  - "do\n"
-                  - "printf \"    '\"$node\"' => 'default',\\n\"\n"
-                  - "done\n"
-                  - "printf \");\n"
-                  - "\\$conf['memcache_bins'] = array(\n"
-                  - "    'cache' => 'default',\n"
-                  - );"
-              mode: '000500'
-              owner: root
-              group: root
-          commands:
-            '01_download_memcahe_module':
-              cwd: /var/www/drupal
-              command: /root/.config/composer/vendor/drush/drush/drush dl memcache
-              env:
-                HOME: /root
-                DRUSH_PHP: /usr/bin/php
-            '02_append_memcache_settings':
-              cwd: /var/www/drupal/sites/default/
-              command: /tmp/drupalCacheConfig.sh >> settings.php
-            '03_enable_memcache_modules':
-              cwd: /var/www/drupal
-              command: /root/.config/composer/vendor/drush/drush/drush en -y memcache memcache_admin
-              env:
-                HOME: /root
-                DRUSH_PHP: /usr/bin/php
-            '04_clear_cache':
-              cwd: /var/www/drupal
-              command: /root/.config/composer/vendor/drush/drush/drush cc drush
-              env:
-                HOME: /root
-                DRUSH_PHP: /usr/bin/php
-        memcached-drupal-8:
-          files:
-            /tmp/drupalCacheConfig.sh:
-              content: !Join
-                - ''
-                - - "#!/bin/bash\n"
-                  - "printf \"\n"
-                  - "// Memcache Configuration\n"
-                  - "\\$settings['cache']['default'] = 'cache.backend.memcache_storage';\n"
-                  - "\\$settings['memcache_storage']['key_prefix'] = 'dr8';\n"
-                  - "\\$settings['memcache_storage']['bins'] = [\n"
-                  - "    'cache' => 'default',\n"
-                  - "];\n"
-                  - "\\$settings['memcache_storage']['memcached_servers'] =  [\\n\"\
-                    \n"
-                  - "for node in \\\n"
-                  - "`aws elasticache describe-cache-clusters --show-cache-node-info\
-                    \ \\\n"
-                  - '--cache-cluster-id '
-                  - !Ref 'ElastiCacheClusterId'
-                  - " \\\n"
-                  - "--query 'CacheClusters[0].CacheNodes[*].Endpoint.[Address, Port]'\
-                    \ \\\n"
-                  - --output=text --region='
-                  - !Ref 'AWS::Region'
-                  - "'\\\n"
-                  - "| sed -E -e 's/[[:space:]]+/:/g'`\n"
-                  - "do\n"
-                  - "printf \"    '\"$node\"' => 'default',\\n\"\n"
-                  - "done\n"
-                  - "printf \"];\"\n"
-              mode: '000500'
-              owner: root
-              group: root
-          commands:
-            '01_enable_memcahe':
-              cwd: /var/www/drupal
-              command: /root/.config/composer/vendor/drush/drush/drush en -y memcache memcache_storage
-              env:
-                HOME: /root
-                DRUSH_PHP: /usr/bin/php
-            '02_append_memcache_settings':
-              cwd: /var/www/drupal/sites/default/
-              command: /tmp/drupalCacheConfig.sh >> settings.php
     Properties:
       ImageId: !FindInMap
         - AWSAMIRegionMap
