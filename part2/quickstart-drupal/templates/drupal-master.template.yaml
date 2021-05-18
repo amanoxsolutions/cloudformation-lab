@@ -271,7 +271,7 @@ Parameters:
     ConstraintDescription: Quick Start bucket name can include numbers, lowercase
       letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen
       (-).
-    Default: aws-quickstart
+    Default: you-need-to-update-this-value
     Description: S3 bucket name for the Quick Start assets. This string can include
       numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start
       or end with a hyphen (-).
@@ -350,6 +350,13 @@ Parameters:
     Description: Minimum number of web server instances in Auto Scaling group
     Type: Number
 Rules:
+  QSS3BucketNameRule:
+    Assertions:
+      - Assert: !Not
+          - !Equals
+            - !Ref 'QSS3BucketName'
+            - 'you-need-to-update-this-value'
+        AssertDescription: In this lab you have to use your own S3 Bucket name here
   EFSSupportedRegionRule:
     Assertions:
       - Assert: !Contains
