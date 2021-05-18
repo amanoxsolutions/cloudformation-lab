@@ -10,6 +10,17 @@ Parameters:
     ConstraintDescription: Must be a valid IP range in x.x.x.x/x notation
     Description: The CIDR block for VPC
     Type: String
+  EnableElastiCache:
+    Description: Enable ElastiCache
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+    Type: String
+Conditions:
+  EnableElastiCacheCondition: !Equals
+    - !Ref 'EnableElastiCache'
+    - 'true'
 Resources:
   AuroraRDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -59,6 +70,17 @@ Resources:
           FromPort: '2049'
           ToPort: '2049'
           CidrIp: !Ref 'VPCCIDR'
+  ElastiCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: EnableElastiCacheCondition
+    Properties:
+      GroupDescription: Allow access to ElastiCache-Memcached Port (AWS Quick Start)
+      VpcId: !Ref 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '11211'
+          ToPort: '11211'
+          SourceSecurityGroupId: !GetAtt 'WebServerSecurityGroup.GroupId'
 Outputs:
   AuroraRDSSecurityGroup:
     Description: Aurora Security Group
@@ -72,3 +94,9 @@ Outputs:
   EFSSecurityGroup:
     Description: EFS Security Group
     Value: !Ref 'EFSSecurityGroup'
+  ElastiCacheSecurityGroup:
+    Description: ElastiCache Security Group
+    Value: !If
+      - EnableElastiCacheCondition
+      - !Ref 'ElastiCacheSecurityGroup'
+      - ''
