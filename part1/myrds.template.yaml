@@ -7,7 +7,7 @@ Description:
 Parameters:
   DBAllocatedStorage:
     Type: String
-    Default: '2'
+    Default: '20'
   DBName:
     Type: String
     Default: MyDB
