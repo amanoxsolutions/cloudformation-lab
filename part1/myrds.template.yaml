@@ -1,0 +1,128 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description:
+  'db template'
+
+Parameters:
+  DBAllocatedStorage:
+    Type: String
+    Default: '2'
+  DBName:
+    Type: String
+    Default: MyDB
+  DBUser:
+    Type: String
+    Default: admin
+  DBPassword:
+    Type: String
+    NoEcho: 'True'
+    MaxLength: '41'
+    MinLength: '8'
+  DBClass:
+    Type: String
+    AllowedValues:
+      - db.t2.small
+      - db.t2.medium
+      - db.r3.large
+      - db.r3.xlarge
+      - db.r3.2xlarge
+      - db.r3.4xlarge
+      - db.r3.8xlarge
+    Default: db.t2.small
+  MultiAZDatabase:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  
+  VPCAvailabilityZones:
+    Description: 'List of Availability Zones to use for the subnets in the VPC. Note: The logical order is preserved.'
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+  VPCNumberOfAZs:
+    AllowedValues:
+      - '2'
+      - '3'
+      - '4'
+    Default: '2'
+    Description: Number of Availability Zones to use in the VPC. This must match your selections in the list of Availability Zones parameter.
+    Type: String
+
+Resources:
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: "https://cflab-part1-daho.s3.eu-central-1.amazonaws.com/aws-vpc.template.yaml"
+      # TODO adjust your bucket url
+      Parameters: 
+        AvailabilityZones: !Join
+         - ','
+         - !Ref 'VPCAvailabilityZones'
+        NumberOfAZs: !Ref 'VPCNumberOfAZs'
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets available for the DB Instance
+      SubnetIds: 
+        - !GetAtt VPCStack.Outputs.PrivateSubnet1AID
+        - !GetAtt VPCStack.Outputs.PrivateSubnet2AID
+
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the DB
+      VpcId: !GetAtt VPCStack.Outputs.VPCID
+    
+    #   SecurityGroupIngress:  # not relevant in this
+    #   - IpProtocol: tcp
+    #     FromPort: '3306'
+    #     ToPort: '3306'
+    #     SourceSecurityGroupName:
+    #       Ref: WebServerSecurityGroup  # TODO
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName:
+        Ref: DBName
+      Engine: MySQL
+      MultiAZ:
+        Ref: MultiAZDatabase
+      MasterUsername:
+        Ref: DBUser
+      DBInstanceClass:
+        Ref: DBClass
+      AllocatedStorage:
+        Ref: DBAllocatedStorage
+      MasterUserPassword:
+        Ref: DBPassword
+      VPCSecurityGroups:  
+      - !GetAtt DBEC2SecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+Outputs:
+  EndPoint:
+    Description: Endpoint to connect
+    Value: !Join
+      - ''
+      - - !GetAtt 'DBInstance.Endpoint.Address'
+        - ':'
+        - !GetAtt 'DBInstance.Endpoint.Port'
+        - /
+        - !Ref 'DBName'
+  DBName:
+    Description: DBName
+    Value: !Ref 'DBName'
+  AuroraEndPointAddress:
+    Description: Endpoint address to connect
+    Value: !Join
+      - ''
+      - - !GetAtt 'DBInstance.Endpoint.Address'
+  AuroraEndPointPort:
+    Description: Endpoint port to connect
+    Value: !Join
+      - ''
+      - - !GetAtt 'DBInstance.Endpoint.Port'
+
