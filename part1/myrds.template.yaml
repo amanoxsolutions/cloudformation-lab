@@ -53,7 +53,7 @@ Resources:
   VPCStack:
     Type: AWS::CloudFormation::Stack
     Properties: 
-      TemplateURL: "https://cflab-part1-daho.s3.eu-central-1.amazonaws.com/aws-vpc.template.yaml"
+      TemplateURL: "https://cflab-part1-x.s3.eu-central-1.amazonaws.com/aws-vpc.template.yaml"
       # TODO adjust your bucket url
       Parameters: 
         AvailabilityZones: !Join
